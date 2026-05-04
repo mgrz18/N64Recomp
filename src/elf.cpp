@@ -499,9 +499,11 @@ ELFIO::section* read_sections(N64Recomp::Context& context, const N64Recomp::ElfP
                             // This is an invalid elf as the MIPS System V ABI documentation states:
                             // "Each relocation type of R_MIPS_HI16 must have an associated R_MIPS_LO16 entry
                             // immediately following it in the list of relocations."
-                            fmt::print(stderr, "Unpaired HI16 reloc index {} in section {} referencing symbol {} with offset 0x{:08X}\n",
+                            fmt::print(stderr, "WARNING: Unpaired HI16 reloc index {} in section {} referencing symbol {} with offset 0x{:08X} (skipping)\n",
                                 i - 1, section_out.name, section_out.relocs[i - 1].symbol_index, section_out.relocs[i - 1].address);
-                            return nullptr;
+                            // Remove the unpaired HI16 reloc and continue instead of aborting
+                            section_out.relocs.pop_back();
+                            prev_hi = false;
                         }
                         prev_lo = false;
                     }

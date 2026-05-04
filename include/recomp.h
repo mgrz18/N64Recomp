@@ -92,24 +92,29 @@ typedef uint64_t gpr;
 #define SUB32(a, b) \
     ((gpr)(int32_t)((a) - (b)))
 
+// Use a 29-bit physical address mask (0x1FFFFFFF) matching N64 kseg0/kseg1 behavior.
+// This correctly handles both sign-extended (0xFFFFFFFF80XXXXXX) and non-sign-extended
+// (0x80XXXXXX or 0x00000000) MIPS addresses by stripping the upper segment bits.
+#define PHYS(addr) ((addr) & 0x1FFFFFFFULL)
+
 #define MEM_W(offset, reg) \
-    (*(int32_t*)(rdram + ((((reg) + (offset))) - 0xFFFFFFFF80000000)))
+    (*(int32_t*)(rdram + PHYS(((reg) + (offset)))))
 
 #define MEM_H(offset, reg) \
-    (*(int16_t*)(rdram + ((((reg) + (offset)) ^ 2) - 0xFFFFFFFF80000000)))
+    (*(int16_t*)(rdram + PHYS(((reg) + (offset)) ^ 2)))
 
 #define MEM_B(offset, reg) \
-    (*(int8_t*)(rdram + ((((reg) + (offset)) ^ 3) - 0xFFFFFFFF80000000)))
+    (*(int8_t*)(rdram + PHYS(((reg) + (offset)) ^ 3)))
 
 #define MEM_HU(offset, reg) \
-    (*(uint16_t*)(rdram + ((((reg) + (offset)) ^ 2) - 0xFFFFFFFF80000000)))
+    (*(uint16_t*)(rdram + PHYS(((reg) + (offset)) ^ 2)))
 
 #define MEM_BU(offset, reg) \
-    (*(uint8_t*)(rdram + ((((reg) + (offset)) ^ 3) - 0xFFFFFFFF80000000)))
+    (*(uint8_t*)(rdram + PHYS(((reg) + (offset)) ^ 3)))
 
 #define SD(val, offset, reg) { \
-    *(uint32_t*)(rdram + ((((reg) + (offset) + 4)) - 0xFFFFFFFF80000000)) = (uint32_t)((gpr)(val) >> 0); \
-    *(uint32_t*)(rdram + ((((reg) + (offset) + 0)) - 0xFFFFFFFF80000000)) = (uint32_t)((gpr)(val) >> 32); \
+    *(uint32_t*)(rdram + PHYS(((reg) + (offset) + 4))) = (uint32_t)((gpr)(val) >> 0); \
+    *(uint32_t*)(rdram + PHYS(((reg) + (offset) + 0))) = (uint32_t)((gpr)(val) >> 32); \
 }
 
 static inline uint64_t load_doubleword(uint8_t* rdram, gpr reg, gpr offset) {
