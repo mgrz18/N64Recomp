@@ -314,14 +314,36 @@ bool N64Recomp::analyze_function(const N64Recomp::Context& context, const N64Rec
             end_address = stats.jump_tables[i + 1].vram;
         }
 
-        // TODO this assumes that the jump table is in the same section as the function itself
-        cur_jtbl.rom = cur_jtbl.vram + func.rom - func.vram;
-        cur_jtbl.section_index = func.section_index;
+        // The table usually lives in the function's own section, but not always: a
+        // game that runs its code TLB-mapped in useg can keep the tables in a KSEG0
+        // rodata section. Applying the function's vram->rom delta to such a table
+        // lands gigabytes past the end of the ROM, so find the section that
+        // actually contains it and fall back to the function's own otherwise.
+        uint32_t jtbl_rom_delta = func.rom - func.vram;
+        uint16_t jtbl_section_index = func.section_index;
+        const Section& func_section = context.sections[func.section_index];
+        if (cur_jtbl.vram < func_section.ram_addr || cur_jtbl.vram >= func_section.ram_addr + func_section.size) {
+            for (size_t section_index = 0; section_index < context.sections.size(); section_index++) {
+                const Section& candidate = context.sections[section_index];
+                if (candidate.rom_addr == (uint32_t)-1 || candidate.size == 0) {
+                    continue;
+                }
+                if (cur_jtbl.vram >= candidate.ram_addr && cur_jtbl.vram < candidate.ram_addr + candidate.size) {
+                    jtbl_rom_delta = candidate.rom_addr - candidate.ram_addr;
+                    jtbl_section_index = (uint16_t)section_index;
+                    break;
+                }
+            }
+        }
+        cur_jtbl.rom = cur_jtbl.vram + jtbl_rom_delta;
+        cur_jtbl.section_index = jtbl_section_index;
 
         while (vram < end_address) {
             // Retrieve the current entry of the jump table
-            // TODO same as above
-            uint32_t rom_addr = vram + func.rom - func.vram;
+            uint32_t rom_addr = vram + jtbl_rom_delta;
+            if ((size_t)rom_addr + sizeof(uint32_t) > context.rom.size()) {
+                break;
+            }
             uint32_t jtbl_word = byteswap(*reinterpret_cast<const uint32_t*>(&context.rom[rom_addr]));
 
             if (cur_jtbl.got_offset.has_value() && got_ram_addr.has_value()) {
